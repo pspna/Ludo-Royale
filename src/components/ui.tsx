@@ -1,0 +1,326 @@
+import React, { useCallback } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, ViewStyle, StyleProp, TextStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { shade } from '../lib/theme';
+import { haptic, play } from '../lib/sound';
+
+interface PressProps {
+  children: React.ReactNode;
+  accessibilityLabel?: string;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  scaleTo?: number;
+  sound?: boolean;
+  hitSlop?: number;
+}
+
+export function Press({ accessibilityLabel, children, onPress, onLongPress, style, disabled, scaleTo = 0.94, sound = true, hitSlop }: PressProps) {
+  const layout = StyleSheet.flatten(style) || {};
+  const s = useSharedValue(1);
+  const anim = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+
+  const down = useCallback(() => {
+    s.value = withSpring(scaleTo, { damping: 18, stiffness: 480 });
+  }, [scaleTo]);
+  const up = useCallback(() => {
+    s.value = withSpring(1, { damping: 14, stiffness: 320 });
+  }, []);
+
+  return (
+    <Animated.View style={[anim, style, disabled ? styles.disabled : null]}>
+      <Pressable
+        style={{ flexGrow: 1, flexDirection: layout.flexDirection, alignItems: layout.alignItems,
+          justifyContent: layout.justifyContent, gap: layout.gap }}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !!disabled }}
+        disabled={disabled}
+        hitSlop={hitSlop}
+        onPressIn={down}
+        onPressOut={up}
+        onLongPress={onLongPress}
+        onPress={() => {
+          if (sound) {
+            play('click');
+            haptic('select');
+          }
+          onPress && onPress();
+        }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+interface BtnProps {
+  label?: string;
+  title?: string;
+  onPress?: () => void;
+  icon?: string;
+  iconSize?: number;
+  variant?: 'primary' | 'surface' | 'ghost' | 'gold' | 'secondary' | 'danger' | (string & {});
+  size?: 'sm' | 'md' | 'lg';
+  colors?: string[];
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  loading?: boolean;
+  full?: boolean;
+  ui?: {
+    text?: string;
+    textDim?: string;
+    surface?: string;
+    surfaceAlt?: string;
+    border?: string;
+    primary?: string;
+    onPrimary?: string;
+    gold?: string;
+    shadow?: string;
+    danger?: string;
+  };
+}
+
+export const DEFAULT_BTN_UI = {
+  text: '#F8FAFC',
+  textDim: '#94A3B8',
+  surface: '#1E293B',
+  surfaceAlt: '#0F172A',
+  border: '#334155',
+  primary: '#7C3AED',
+  onPrimary: '#FFFFFF',
+  gold: '#F59E0B',
+  shadow: '#000000',
+  danger: '#EF4444',
+};
+
+export function Btn({
+  label,
+  title,
+  onPress,
+  icon,
+  iconSize = 20,
+  variant = 'primary',
+  size = 'md',
+  colors,
+  style,
+  disabled,
+  loading = false,
+  full,
+  ui,
+}: BtnProps) {
+  const padV = size === 'lg' ? 17 : size === 'sm' ? 9 : 13;
+  const padH = size === 'lg' ? 28 : size === 'sm' ? 14 : 20;
+  const font = size === 'lg' ? 18 : size === 'sm' ? 13 : 15;
+  const displayLabel = label || title || '';
+  const isDisabled = Boolean(disabled || loading);
+
+  const safeUi = {
+    text: ui?.text || DEFAULT_BTN_UI.text,
+    textDim: ui?.textDim || DEFAULT_BTN_UI.textDim,
+    surface: ui?.surface || DEFAULT_BTN_UI.surface,
+    surfaceAlt: ui?.surfaceAlt || DEFAULT_BTN_UI.surfaceAlt,
+    border: ui?.border || DEFAULT_BTN_UI.border,
+    primary: ui?.primary || DEFAULT_BTN_UI.primary,
+    onPrimary: ui?.onPrimary || DEFAULT_BTN_UI.onPrimary,
+    gold: ui?.gold || DEFAULT_BTN_UI.gold,
+    shadow: ui?.shadow || DEFAULT_BTN_UI.shadow,
+    danger: ui?.danger || DEFAULT_BTN_UI.danger,
+  };
+
+  const base: ViewStyle = {
+    paddingVertical: padV,
+    paddingHorizontal: padH,
+    borderRadius: size === 'lg' ? 20 : 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: full ? 'stretch' : 'flex-start',
+  };
+
+  const isSurface = variant === 'surface' || variant === 'secondary';
+  const isGhost = variant === 'ghost';
+
+  if (isSurface || isGhost) {
+    const textColor = isSurface ? safeUi.text : safeUi.textDim;
+    return (
+      <Press onPress={onPress} disabled={isDisabled} style={style}>
+        <View
+          style={[
+            base,
+            {
+              backgroundColor: isSurface ? safeUi.surface : 'transparent',
+              borderWidth: isSurface ? 1.5 : 0,
+              borderColor: safeUi.border,
+              opacity: isDisabled ? 0.6 : 1,
+            },
+          ]}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={textColor} style={{ marginRight: displayLabel ? 8 : 0 }} />
+          ) : icon ? (
+            <Ionicons name={icon as any} size={iconSize} color={textColor} style={{ marginRight: displayLabel ? 8 : 0 }} />
+          ) : null}
+          {displayLabel ? (
+            <Text style={{ color: textColor, fontWeight: '800', fontSize: font }}>{displayLabel}</Text>
+          ) : null}
+        </View>
+      </Press>
+    );
+  }
+
+  // Gradient buttons: primary (default), gold, danger, or any other variant fallback
+  const isGold = variant === 'gold';
+  const isDanger = variant === 'danger';
+
+  const grad = colors || (
+    isGold
+      ? ['#FFDC58', '#FFC928']
+      : isDanger
+      ? [safeUi.danger, shade(safeUi.danger, -0.25)]
+      : [safeUi.primary, shade(safeUi.primary, -0.3)]
+  );
+  const textColor = isGold ? '#3A2A00' : safeUi.onPrimary;
+
+  return (
+    <Press
+      onPress={onPress}
+      disabled={isDisabled}
+      style={[
+        {
+          borderRadius: base.borderRadius,
+          shadowColor: grad[0] || safeUi.primary,
+          shadowOpacity: 0.45,
+          shadowRadius: 14,
+          shadowOffset: { width: 0, height: 7 },
+          elevation: 6,
+          opacity: isDisabled ? 0.6 : 1,
+        },
+        style,
+      ]}
+    >
+      <LinearGradient colors={grad as any} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={base}>
+        {loading ? (
+          <ActivityIndicator size="small" color={textColor} style={{ marginRight: displayLabel ? 8 : 0 }} />
+        ) : icon ? (
+          <Ionicons name={icon as any} size={iconSize} color={textColor} style={{ marginRight: displayLabel ? 9 : 0 }} />
+        ) : null}
+        {displayLabel ? (
+          <Text style={{ color: textColor, fontWeight: '900', fontSize: font, letterSpacing: 0.4 }}>{displayLabel}</Text>
+        ) : null}
+      </LinearGradient>
+    </Press>
+  );
+}
+
+export function Card({ children, style, ui, elevated = true }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; ui?: any; elevated?: boolean }) {
+  const surface = ui?.surface || DEFAULT_BTN_UI.surface;
+  const border = ui?.border || DEFAULT_BTN_UI.border;
+  const shadow = ui?.shadow || DEFAULT_BTN_UI.shadow;
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: surface,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: border,
+          padding: 16,
+          shadowColor: shadow,
+          shadowOpacity: elevated ? 0.14 : 0,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: elevated ? 3 : 0,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function Header({
+  title,
+  subtitle,
+  onBack,
+  right,
+  ui,
+}: {
+  title: string;
+  subtitle?: string;
+  onBack?: () => void;
+  right?: React.ReactNode;
+  ui?: any;
+}) {
+  const text = ui?.text || DEFAULT_BTN_UI.text;
+  const textDim = ui?.textDim || DEFAULT_BTN_UI.textDim;
+  const surface = ui?.surface || DEFAULT_BTN_UI.surface;
+  const border = ui?.border || DEFAULT_BTN_UI.border;
+
+  return (
+    <View style={styles.header}>
+      {onBack ? (
+        <Press accessibilityLabel="Back" onPress={onBack} style={{ marginRight: 12 }}>
+          <View style={[styles.headerBtn, { backgroundColor: surface, borderColor: border }]}>
+            <Ionicons name="chevron-back" size={22} color={text} />
+          </View>
+        </Press>
+      ) : (
+        <View style={{ width: 8 }} />
+      )}
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={[styles.headerTitle, { color: text }]}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text numberOfLines={1} style={[styles.headerSub, { color: textDim }]}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {right}
+    </View>
+  );
+}
+
+export function Pill({ label, icon, color, bg, style, textStyle }: { label: string; icon?: string; color: string; bg: string; style?: StyleProp<ViewStyle>; textStyle?: StyleProp<TextStyle> }) {
+  return (
+    <View style={[styles.pill, { backgroundColor: bg }, style]}>
+      {icon ? <Ionicons name={icon as any} size={13} color={color} style={{ marginRight: 5 }} /> : null}
+      <Text style={[{ color, fontWeight: '800', fontSize: 12.5 }, textStyle]}>{label}</Text>
+    </View>
+  );
+}
+
+export function SectionTitle({ children, ui, style }: { children: React.ReactNode; ui?: any; style?: StyleProp<TextStyle> }) {
+  const textDim = ui?.textDim || DEFAULT_BTN_UI.textDim;
+  return <Text style={[{ color: textDim, fontWeight: '900', fontSize: 12, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 10, marginTop: 18 }, style]}>{children}</Text>;
+}
+
+const styles = StyleSheet.create({
+  disabled: { opacity: 0.45 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingBottom: 10, paddingTop: 6 },
+  headerBtn: { width: 44, height: 44, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 21, fontWeight: '900', letterSpacing: 0.2 },
+  headerSub: { fontSize: 12.5, fontWeight: '600', marginTop: 1 },
+  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+});
+
+export const FadeIn = (delay = 0) => ({
+  initial: { opacity: 0, translateY: 14 },
+  animate: { opacity: 1, translateY: 0 },
+  transition: { duration: 320, delay, type: 'timing' as const },
+});
+
+export function useFade(delay = 0) {
+  const v = useSharedValue(0);
+  const st = useAnimatedStyle(() => ({ opacity: v.value, transform: [{ translateY: (1 - v.value) * 16 }] }));
+  React.useEffect(() => {
+    v.value = withTiming(1, { duration: 380 + delay });
+  }, [delay]);
+  return st;
+}
